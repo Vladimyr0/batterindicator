@@ -63,12 +63,12 @@ class Indicator():
         self.app = 'batterindicator'
         self.indicator = AppIndicator3.Indicator.new(
             self.app, 
-            os.path.abspath(icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_nn.png"),
+            os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_nn.png"),
             AppIndicator3.IndicatorCategory.HARDWARE)
-        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)       
+        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
         self.indicator.set_menu(self.create_menu())
         if show_percentage:
-            self.indicator.set_label("??%", self.app)
+            self.indicator.set_label("? %", self.app)
         Notify.init(self.app)
         self.update = Thread(target=self.show_perc)
         self.update.setDaemon(True)
@@ -97,7 +97,10 @@ class Indicator():
         time.sleep(3)
         while True:
             args = ['/bin/sh','-c','upower -i $(upower -e | grep '+selected_device+') | grep percentage: | grep -o -E "[0-9]+"']
-            s = subprocess.check_output(args).decode('Utf-8').rstrip()
+            try:
+                s = subprocess.check_output(args).decode('Utf-8').rstrip()
+            except subprocess.CalledProcessError:
+                s = '??'
             try:
                 p = int(s)
             except ValueError:
@@ -114,12 +117,12 @@ class Indicator():
                 plabel = s+"%"
                 GObject.idle_add(self.indicator.set_label, plabel, self.app,  priority=GObject.PRIORITY_DEFAULT)
             GObject.idle_add(self.indicator.set_icon, 
-                os.path.abspath(icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_"+iname+".png"),
+                os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_"+iname+".png"),
             priority=GObject.PRIORITY_DEFAULT)
             if (0 <= p < 10) and (lp >= 10): 
                 Notify.Notification.new("<b>Performance MX</b>", 
                     "\u0411\u0430\u0442\u0430\u0440\u0435\u044F \u0440\u0430\u0437\u0440\u044F\u0436\u0435\u043D\u0430!", 
-                os.path.abspath(icon_folder+"/battery-charge-20.png")).show()    
+                os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/battery-charge-20.png")).show()    
             lp = p
             time.sleep(30)
 
@@ -130,7 +133,7 @@ class Indicator():
         about_dialog = Gtk.AboutDialog()
         about_dialog.set_destroy_with_parent(True)
         about_dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file(
-            os.path.abspath(icon_folder+"/battery-charge-100.png")))
+            os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/battery-charge-100.png")))
         authors = ["GNOME Documentation Team"]
         documenters = ["GNOME Documentation Team"]
         about_dialog.set_program_name(self.app)
@@ -148,12 +151,19 @@ class Indicator():
         args = ['/bin/sh','-c','upower -i $(upower -e | grep '+selected_device+')']
         mf = ''
         st = ''
-        for line in subprocess.check_output(args).splitlines():
-            sline = line.decode('Utf-8').strip()
-            if sline.find('model:') >= 0: 
-                mf = sline
-            elif (sline.find('state:') >= 0) or (sline.find('battery-level:') >= 0) or (sline.find('percentage:') >= 0): 
-                st += sline + '\n'
+        s = ''
+        try:
+            s = subprocess.check_output(args, stderr=subprocess.STDOUT).decode('Utf-8')
+        except subprocess.CalledProcessError as e:
+            mf = 'ERROR'
+            st = 'code: '+str(e.returncode)+'\n'+e.output.decode('Utf-8')
+        if mf == '':
+            for line in s.splitlines():
+                sline = line.strip()
+                if sline.find('model:') >= 0: 
+                    mf = sline
+                elif (sline.find('state:') >= 0) or (sline.find('battery-level:') >= 0) or (sline.find('percentage:') >= 0): 
+                    st += sline + '\n'
         messagedialog = Gtk.MessageDialog(type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK,
             message_format=mf)
         messagedialog.format_secondary_text(st)
