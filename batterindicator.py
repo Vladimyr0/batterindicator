@@ -126,7 +126,10 @@ class Indicator():
                 p < 0: "nn"
             }[True]            
             if show_percentage:
-                plabel = perc+"%"
+                if m == '':
+                    plabel = perc+"%"
+                else:
+                    plabel = perc.replace("0","\u2080").replace("1","\u2081").replace("2","\u2082").replace("3","\u2083").replace("4","\u2084").replace("5","\u2085").replace("6","\u2086").replace("7","\u2087").replace("8","\u2088").replace("9","\u2089")+"\uFE6A"
                 GObject.idle_add(self.indicator.set_label, plabel, self.app,  priority=GObject.PRIORITY_DEFAULT)
             GObject.idle_add(self.indicator.set_icon, 
                 os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+m+"_"+iname+".png"),
