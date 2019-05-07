@@ -25,6 +25,7 @@ except ImportError as exc:
     )
 icon_folder = 'icons'
 selected_device = ''
+args = []
 device_icon = ''
 show_percentage = False
 selected_theme = 'd'
@@ -33,7 +34,7 @@ usage = 'usage: "batterindicator.py -k/m [-d/w] [-p] [--l=N]"'
 
 class Indicator():
     def __init__(self):
-        global selected_device, device_icon, show_percentage, selected_theme, warning_limit
+        global selected_device, device_icon, show_percentage, selected_theme, warning_limit, args
         try:
             opts, args = getopt.getopt(sys.argv[1:],"kmdwp",["l="])
         except getopt.GetoptError:
@@ -61,6 +62,7 @@ class Indicator():
             sys.exit(2)
 
         self.app = 'batterindicator'
+        args = ['/bin/sh','-c','upower -i $(upower -e | grep '+selected_device+')']
         self.indicator = AppIndicator3.Indicator.new(
             self.app, 
             os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_nn.png"),
@@ -96,13 +98,23 @@ class Indicator():
         lp = 100
         time.sleep(3)
         while True:
-            args = ['/bin/sh','-c','upower -i $(upower -e | grep '+selected_device+') | grep percentage: | grep -o -E "[0-9]+"']
+            perc = '??'
+            model = ''
+            m = ''
             try:
-                s = subprocess.check_output(args).decode('Utf-8').rstrip()
+                s = subprocess.check_output(args).decode('Utf-8')
             except subprocess.CalledProcessError:
-                s = '??'
+                s = ''                
+            for line in s.splitlines():
+                sline = line.strip()
+                if sline.find('model:') >= 0: 
+                    model = sline[22:]
+                elif (sline.find('state:') >= 0) and (sline.find('unknown') >= 0):
+                    m = 'm'
+                elif sline.find('percentage:') >= 0:
+                    perc = sline[21:-1]
             try:
-                p = int(s)
+                p = int(perc)
             except ValueError:
                 p = -1
             iname = {
@@ -114,13 +126,13 @@ class Indicator():
                 p < 0: "nn"
             }[True]            
             if show_percentage:
-                plabel = s+"%"
+                plabel = perc+"%"
                 GObject.idle_add(self.indicator.set_label, plabel, self.app,  priority=GObject.PRIORITY_DEFAULT)
             GObject.idle_add(self.indicator.set_icon, 
-                os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+"_"+iname+".png"),
+                os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+m+"_"+iname+".png"),
             priority=GObject.PRIORITY_DEFAULT)
             if (0 <= p < 10) and (lp >= 10): 
-                Notify.Notification.new("<b>Performance MX</b>", 
+                Notify.Notification.new("<b>"+model+"</b>", 
                     "\u0411\u0430\u0442\u0430\u0440\u0435\u044F \u0440\u0430\u0437\u0440\u044F\u0436\u0435\u043D\u0430!", 
                 os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/battery-charge-20.png")).show()    
             lp = p
@@ -148,7 +160,6 @@ class Indicator():
         about_dialog.destroy()
 
     def message(self, source):
-        args = ['/bin/sh','-c','upower -i $(upower -e | grep '+selected_device+')']
         mf = ''
         st = ''
         s = ''
