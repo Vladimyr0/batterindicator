@@ -1,7 +1,7 @@
 # batterindicator
 applet to show in systray the battery status of connected HIDs
 
-you can start two or more instances to see battery status __both__ keyboard and mouse
+you can start two or more instances to see battery status of __both__ keyboard and mouse
 
 1. requirements: python3, gi
 
