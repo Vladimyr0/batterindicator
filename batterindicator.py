@@ -123,6 +123,8 @@ class Indicator():
                     model = sline[22:]
                 elif (sline.find('state:') >= 0) and (sline.find('unknown') >= 0):
                     m = 'm'
+                elif (sline.find('state:') >= 0) and (sline.find(' charg') >= 0):
+                    m = 'c'
                 elif sline.find('percentage:') >= 0:
                     perc = sline[21:-1]
             try:
