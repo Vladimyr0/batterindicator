@@ -24,17 +24,20 @@ except ImportError as exc:
         "Install the library 'python3-gi' \n{0}".format(str(exc))
     )
 icon_folder = 'icons'
-selected_device = ''
-args = []
-device_icon = ''
-show_percentage = False
-selected_theme = 'd'
-warning_limit = 10
 usage = 'usage: "batterindicator.py -k/m [-d/w] [-p] [--l=N]"'
 
 class Indicator():
+
     def __init__(self):
-        global selected_device, device_icon, show_percentage, selected_theme, warning_limit, args
+        global device_icon, show_percentage, selected_theme, warning_limit, args, lp, perc
+        selected_device = ''
+        device_icon = ''
+        show_percentage = False
+        selected_theme = 'd'
+        warning_limit = 10
+        args = []
+        lp = 100
+        perc = '??'
         try:
             opts, args = getopt.getopt(sys.argv[1:],"kmdwp",["l="])
         except getopt.GetoptError:
@@ -42,10 +45,10 @@ class Indicator():
             sys.exit(2)
         for opt, arg in opts:
             if opt == '-k':
-                selected_device = 'keyboard'
+                selected_device = 'battery_hidpp_battery_0'
                 device_icon = 'kbd'
             elif opt == '-m':
-                selected_device = 'mouse'
+                selected_device = 'battery_hidpp_battery_1'
                 device_icon = 'mse'
             elif opt == '-w':
                 selected_theme = 'w'
@@ -56,7 +59,7 @@ class Indicator():
                     warning_limit = int(arg)
                     print ('warning_limit = '+str(warning_limit))
                 except ValueError:
-                    warning_limit = 10
+                    warning_limit = 5
         if selected_device == '':
             print (usage)
             sys.exit(2)
@@ -89,7 +92,7 @@ class Indicator():
         menu.append(menu_sep)
         item_info = Gtk.ImageMenuItem('info')
         info_img = Gtk.Image()
-        info_img.set_from_icon_name("view-task", Gtk.IconSize.MENU)
+        info_img.set_from_icon_name("tray-message", Gtk.IconSize.MENU)
         item_info.set_image(info_img)
         item_info.set_always_show_image(True)
         item_info.connect('activate', self.message)
@@ -107,40 +110,52 @@ class Indicator():
         return menu
 
     def show_perc(self):
-        lp = 100
+        global device_icon, show_percentage, selected_theme, warning_limit, args, lp, perc
         time.sleep(3)
         while True:
-            perc = '??'
             model = ''
             m = ''
+            disc = False
+            unkn = False
+            full = False
+            perc_ = ''
             try:
                 s = subprocess.check_output(args).decode('Utf-8')
             except subprocess.CalledProcessError:
                 s = ''                
             for line in s.splitlines():
                 sline = line.strip()
-                if sline.find('model:') >= 0: 
+                if sline.find ('model:') >= 0:
                     model = sline[22:]
-                elif (sline.find('state:') >= 0) and (sline.find('unknown') >= 0):
+                elif (sline.find ('state:') >= 0) and (sline.find('unknown') >= 0):
                     m = 'm'
-                elif (sline.find('state:') >= 0) and (sline.find(' charg') >= 0):
+                elif (sline.find ('state:') >= 0) and ((sline.find(' charg') >= 0) or (sline.find('full') >= 0)):
                     m = 'c'
-                elif sline.find('percentage:') >= 0:
-                    perc = sline[21:-1]
+                    if sline.find('full') >= 0:
+                        perc = '100'
+                        full = True
+                elif (sline.find ('state:') >= 0) and (sline.find('discharg') >= 0):
+                    disc = True
+                elif sline.find ('percentage:') >= 0:
+                    perc_ = sline[21:(sline.find ('%'))]
+                elif (sline.find ('battery-level:') >= 0) and (sline.find ('unknown') >= 0):
+                    unkn = True
+                    if disc: perc = '1'
+                if (perc_ != '') and not unkn: perc = perc_
             try:
-                p = int(perc)
+                p = int (perc)
             except ValueError:
                 p = -1
             iname = {
-                80 < p <= 100: "100",
-                60 < p <= 80: "80",
-                40 < p <= 60: "60",
-                20 < p <= 40: "40",
-                0 <= p <= 20: "20",
+                90 < p <= 100: "100",
+                60 < p <= 90: "80",
+                10 < p <= 60: "60",
+                5 < p <= 10: "40",
+                0 <= p <= 5: "20",
                 p < 0: "nn"
             }[True]            
             if show_percentage:
-                if m == '':
+                if (m == '') or full:
                     plabel = perc+"%"
                 else:
                     plabel = perc.replace("0","\u2080").replace("1","\u2081").replace("2","\u2082").replace("3","\u2083").replace("4","\u2084").replace("5","\u2085").replace("6","\u2086").replace("7","\u2087").replace("8","\u2088").replace("9","\u2089")+"\uFE6A"
@@ -148,7 +163,7 @@ class Indicator():
             GObject.idle_add(self.indicator.set_icon, 
                 os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/bat_"+device_icon+"_"+selected_theme+m+"_"+iname+".png"),
             priority=GObject.PRIORITY_DEFAULT)
-            if (0 <= p < 10) and (lp >= 10): 
+            if (0 <= p < warning_limit) and (lp >= warning_limit):
                 Notify.Notification.new("<b>"+model+"</b>", 
                     "\u0411\u0430\u0442\u0430\u0440\u0435\u044F \u0440\u0430\u0437\u0440\u044F\u0436\u0435\u043D\u0430!", 
                 os.path.join(os.path.abspath (os.path.dirname(sys.argv[0])), icon_folder+"/battery-charge-20.png")).show()    
@@ -190,8 +205,10 @@ class Indicator():
                 sline = line.strip()
                 if sline.find('model:') >= 0: 
                     mf = sline
-                elif (sline.find('state:') >= 0) or (sline.find('battery-level:') >= 0) or (sline.find('percentage:') >= 0): 
+                elif (sline.find('state:') >= 0) or (sline.find('battery-level:') >= 0):
                     st += sline + '\n'
+                elif (sline.find('percentage:') >= 0):
+                    st += sline[0:(sline.find ('%') + 1)] + '\n'
         messagedialog = Gtk.MessageDialog(type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK,
             message_format=mf)
         messagedialog.format_secondary_text(st)
